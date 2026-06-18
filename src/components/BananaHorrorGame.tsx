@@ -709,7 +709,7 @@ export function BananaHorrorGame() {
 
   const [mix, setMix] = useState({
     master: 0.7,
-    bgm: 0.15,
+    bgm: 1.0,
     drone: 0.1,
     heart: 0.5,
     sfx: 0.5,
