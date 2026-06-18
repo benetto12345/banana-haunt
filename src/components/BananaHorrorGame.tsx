@@ -35,7 +35,7 @@ class AudioEngine {
       this.master.connect(this.ctx.destination);
 
       this.bgmGain = this.ctx.createGain();
-      this.bgmGain.gain.value = 1.0;
+      this.bgmGain.gain.value = 5.0;
       this.bgmGain.connect(this.master);
 
       this.droneGain = this.ctx.createGain();
