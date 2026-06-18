@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { BGM_BASE64_DATA } from "./bgmBuffer";
 
 // ============================================================================
 // Lightweight Audio Engine
@@ -72,13 +71,17 @@ class AudioEngine {
     }
   }
 
-// 新しい startBGM メソッド（ここを丸ごと貼り付け）
-  async startBGM() {
+async startBGM() {
     if (!this.ctx || !this.bgmGain) return;
 
     try {
+      // public/bgm.txt からBase64文字列を非同期で読み込む
+      const response = await fetch("https://raw.githubusercontent.com/benetto12345/banana-haunt/refs/heads/main/src/components/bgmBuffer.txt");
+      if (!response.ok) throw new Error("Failed to load bgm.txt");
+      const base64String = await response.text();
+
       // プレフィックス(data:audio/mpeg;base64,)を除去
-      const base64Data = BGM_BASE64_DATA.replace(/^data:audio\/\w+;base64,/, "");
+      const base64Data = base64String.replace(/^data:audio\/\w+;base64,/, "").trim();
       
       // Base64からバイナリ(ArrayBuffer)に変換
       const binaryString = atob(base64Data);
