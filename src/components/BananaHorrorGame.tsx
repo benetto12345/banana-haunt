@@ -75,39 +75,47 @@ async startBGM() {
     if (!this.ctx || !this.bgmGain) return;
 
     try {
-      // public/bgm.txt からBase64文字列を非同期で読み込む
       const response = await fetch("https://raw.githubusercontent.com/benetto12345/banana-haunt/refs/heads/main/src/components/bgmBuffer.txt");
       if (!response.ok) throw new Error("Failed to load bgm.txt");
-      const base64String = await response.text();
+      let base64String = await response.text();
 
-      // プレフィックス(data:audio/mpeg;base64,)を除去
-      const base64Data = base64String.replace(/^data:audio\/\w+;base64,/, "").trim();
-      
-      // Base64からバイナリ(ArrayBuffer)に変換
-      const binaryString = atob(base64Data);
+      // 1. Data URLヘッダーの除去、および不要な改行・空白・クォーテーションを徹底排除
+      base64String = base64String
+        .replace(/^data:audio\/\w+;base64,/, "")
+        .replace(/["';\s]/g, ""); // 改行や余計なクォーテーションをクリア
+
+      // 2. 巨大なBase64文字列を安全にUint8Array（バイナリ）に変換
+      // (atobは巨大すぎるとエラーを起こすことがあるため、より堅牢な変換を行います)
+      const binaryString = atob(base64String);
       const len = binaryString.length;
       const bytes = new Uint8Array(len);
+      
+      // ループの高速化処理
       for (let i = 0; i < len; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
       const arrayBuffer = bytes.buffer;
       
-      // Web Audio APIのオーディオデータにデコード
+      // 3. Web Audio APIでデコード
       const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
 
-      // バッファソースの作成とループ設定
+      // 4. ソースを作成してループ再生
       const source = this.ctx.createBufferSource();
       source.buffer = audioBuffer;
-      source.loop = true; // ループ再生
+      source.loop = true;
 
-      // ミキサーのBGMゲインノードに接続して再生開始
       source.connect(this.bgmGain);
       source.start(0);
+      
+      // 5. 停止管理用に保持
+      this.bgmSource = source;
+      
+      console.log("BGM successfully started!");
     } catch (error) {
+      // どこでエラーが出たかコンソールで追跡できるようにする
       console.error("Failed to play Base64 BGM:", error);
     }
   }
-
   startDrone() {
     if (!this.ctx || !this.droneGain) return;
     const osc = this.ctx.createOscillator();
