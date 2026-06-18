@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { BGM_BASE64_DATA } from "./bgmBuffer";
 
 // ============================================================================
 // Lightweight Audio Engine
@@ -71,17 +72,37 @@ class AudioEngine {
     }
   }
 
-  startBGM() {
+// 新しい startBGM メソッド（ここを丸ごと貼り付け）
+  async startBGM() {
     if (!this.ctx || !this.bgmGain) return;
-    const freqs = [110, 164.81];
-    freqs.forEach((f, i) => {
-      const osc = this.ctx!.createOscillator();
-      osc.type = i === 0 ? "sine" : "triangle";
-      osc.frequency.value = f;
-      osc.detune.value = (Math.random() - 0.5) * 6;
-      osc.connect(this.bgmGain!);
-      osc.start();
-    });
+
+    try {
+      // プレフィックス(data:audio/mpeg;base64,)を除去
+      const base64Data = BGM_BASE64_DATA.replace(/^data:audio\/\w+;base64,/, "");
+      
+      // Base64からバイナリ(ArrayBuffer)に変換
+      const binaryString = atob(base64Data);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const arrayBuffer = bytes.buffer;
+      
+      // Web Audio APIのオーディオデータにデコード
+      const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
+
+      // バッファソースの作成とループ設定
+      const source = this.ctx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.loop = true; // ループ再生
+
+      // ミキサーのBGMゲインノードに接続して再生開始
+      source.connect(this.bgmGain);
+      source.start(0);
+    } catch (error) {
+      console.error("Failed to play Base64 BGM:", error);
+    }
   }
 
   startDrone() {
