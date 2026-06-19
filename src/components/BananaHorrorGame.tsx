@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 
-// ============================================================================
-// Lightweight Audio Engine
-// ============================================================================
-
 class AudioEngine {
   ctx: AudioContext | null = null;
   master: GainNode | null = null;
@@ -35,7 +31,7 @@ class AudioEngine {
       this.master.connect(this.ctx.destination);
 
       this.bgmGain = this.ctx.createGain();
-      this.bgmGain.gain.value = 5.0;
+      this.bgmGain.gain.value = 0.15;
       this.bgmGain.connect(this.master);
 
       this.droneGain = this.ctx.createGain();
@@ -71,51 +67,19 @@ class AudioEngine {
     }
   }
 
-async startBGM() {
+  startBGM() {
     if (!this.ctx || !this.bgmGain) return;
-
-    try {
-      const response = await fetch("https://raw.githubusercontent.com/benetto12345/banana-haunt/refs/heads/main/src/components/bgmBuffer.txt");
-      if (!response.ok) throw new Error("Failed to load bgm.txt");
-      let base64String = await response.text();
-
-      // 1. Data URLヘッダーの除去、および不要な改行・空白・クォーテーションを徹底排除
-      base64String = base64String
-        .replace(/^data:audio\/\w+;base64,/, "")
-        .replace(/["';\s]/g, ""); // 改行や余計なクォーテーションをクリア
-
-      // 2. 巨大なBase64文字列を安全にUint8Array（バイナリ）に変換
-      // (atobは巨大すぎるとエラーを起こすことがあるため、より堅牢な変換を行います)
-      const binaryString = atob(base64String);
-      const len = binaryString.length;
-      const bytes = new Uint8Array(len);
-      
-      // ループの高速化処理
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      const arrayBuffer = bytes.buffer;
-      
-      // 3. Web Audio APIでデコード
-      const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
-
-      // 4. ソースを作成してループ再生
-      const source = this.ctx.createBufferSource();
-      source.buffer = audioBuffer;
-      source.loop = true;
-
-      source.connect(this.bgmGain);
-      source.start(0);
-      
-      // 5. 停止管理用に保持
-      this.bgmSource = source;
-      
-      console.log("BGM successfully started!");
-    } catch (error) {
-      // どこでエラーが出たかコンソールで追跡できるようにする
-      console.error("Failed to play Base64 BGM:", error);
-    }
+    const freqs = [110, 164.81];
+    freqs.forEach((f, i) => {
+      const osc = this.ctx!.createOscillator();
+      osc.type = i === 0 ? "sine" : "triangle";
+      osc.frequency.value = f;
+      osc.detune.value = (Math.random() - 0.5) * 6;
+      osc.connect(this.bgmGain!);
+      osc.start();
+    });
   }
+
   startDrone() {
     if (!this.ctx || !this.droneGain) return;
     const osc = this.ctx.createOscillator();
@@ -161,7 +125,6 @@ async startBGM() {
         0.15,
       );
     } catch {
-      /* ignore */
     }
     this.heartRate = 55 + level * 90;
   }
@@ -276,7 +239,6 @@ async startBGM() {
       u.volume = 0.9;
       window.speechSynthesis.speak(u);
     } catch {
-      /* ignore */
     }
   }
 
@@ -299,9 +261,6 @@ async startBGM() {
   }
 }
 
-// ============================================================================
-// Game
-// ============================================================================
 
 const TILE = 28;
 const COLS = 20;
@@ -360,10 +319,9 @@ export interface Difficulty {
   apples: number;
   enemySpeedMs: number;
   enemies: Partial<Record<EnemyKind, number>>;
-  items?: number; // total beneficial items spawned
+  items?: number;
 }
 
-// 10 finely-tuned difficulty levels + custom
 export const DIFFICULTIES: Difficulty[] = [
   { id: "lv1",  label: "Lv1 ほのぼの 🍮",     apples: 3,  enemySpeedMs: 600, enemies: { banana: 1 },                                  items: 4 },
   { id: "lv2",  label: "Lv2 やさしい 🌱",     apples: 4,  enemySpeedMs: 520, enemies: { banana: 1 },                                  items: 4 },
@@ -388,11 +346,10 @@ interface GameState {
   status: "playing" | "won" | "lost";
   hidden: boolean;
   totalApples: number;
-  // power-ups
   lives: number;
-  shieldUntil: number;   // ms timestamp
-  slowUntil: number;     // enemies move slower
-  stunUntil: number;     // enemies frozen
+  shieldUntil: number;
+  slowUntil: number;
+  stunUntil: number;
   lastMessage: string;
 }
 
@@ -403,6 +360,7 @@ function generateLevel(
 ): GameState {
   const counts = enemyCounts ?? {};
   const walls = new Set<string>();
+
   for (let x = 0; x < COLS; x++) {
     walls.add(`${x},0`);
     walls.add(`${x},${ROWS - 1}`);
@@ -439,7 +397,6 @@ function generateLevel(
     apples.push(c);
   }
 
-  // Items: distribute roughly evenly among kinds
   const items: Item[] = [];
   const itemKinds: ItemKind[] = ["heart", "slow", "shield", "stun"];
   let iAttempts = 0;
@@ -483,7 +440,6 @@ function generateLevel(
   };
 }
 
-// BFS for enemy AI
 function nextStepToward(
   from: Vec,
   to: Vec,
@@ -537,7 +493,6 @@ function stepEnemy(
   hidden: boolean,
 ): Vec {
   const k = enemy.kind;
-  // When player is hidden, enemies can't see them — wander randomly.
   if (hidden) {
     return randomFreeNeighbor(enemy.pos, walls) ?? enemy.pos;
   }
@@ -659,7 +614,6 @@ export function BananaHorrorGame() {
   const [, force] = useState(0);
   const rerender = useCallback(() => force((v) => v + 1), []);
 
-  // Viewport tracking for responsive canvas sizing (rAF-throttled, visualViewport-aware)
   const getVp = () => {
     if (typeof window === "undefined") return { w: 800, h: 600 };
     const vv = window.visualViewport;
@@ -697,7 +651,6 @@ export function BananaHorrorGame() {
     };
   }, []);
   const isLandscape = viewport.w > viewport.h;
-  // Fixed D-pad slot widths so the canvas position doesn't shift mid-layout
   const dpadSlotW = isTouch ? (isLandscape ? 248 : 180) : 0;
   const reservedH = isLandscape ? 80 : (isTouch ? 220 : 160);
   const reservedW = dpadSlotW + 24;
@@ -709,7 +662,7 @@ export function BananaHorrorGame() {
 
   const [mix, setMix] = useState({
     master: 0.7,
-    bgm: 1.0,
+    bgm: 0.15,
     drone: 0.1,
     heart: 0.5,
     sfx: 0.5,
@@ -730,9 +683,6 @@ export function BananaHorrorGame() {
         .map((k) => ENEMY_LABEL[k])
         .join("、");
       setTimeout(() => {
-        engineRef.current?.speak(
-          `${enemyTypes || "敵"}が、追いかけてくる。りんごを${d.apples}つ集めなさい。`,
-        );
       }, 300);
     } catch (e) {
       console.error("start failed", e);
@@ -742,7 +692,6 @@ export function BananaHorrorGame() {
     }
   };
 
-  // Mixer
   useEffect(() => {
     if (!started || !engineRef.current) return;
     (Object.keys(mix) as (keyof typeof mix)[]).forEach((k) => {
@@ -750,7 +699,6 @@ export function BananaHorrorGame() {
     });
   }, [mix, started]);
 
-  // Keyboard
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
@@ -758,7 +706,6 @@ export function BananaHorrorGame() {
       if (e.key === " " || e.key.startsWith("Arrow")) {
         e.preventDefault();
       }
-      // Toggle hide on Shift press (edge-trigger, not hold)
       if (key === "shift") {
         const s = stateRef.current;
         if (s.status === "playing") {
@@ -779,17 +726,15 @@ export function BananaHorrorGame() {
     };
   }, [rerender]);
 
-  // Player movement + pickups
   const move = useCallback((dx: number, dy: number) => {
     const s = stateRef.current;
     if (s.status !== "playing") return;
-    if (s.hidden) return; // 隠れている間は動けない
+    if (s.hidden) return;
     const nx = s.player.x + dx;
     const ny = s.player.y + dy;
     if (s.walls.has(`${nx},${ny}`)) return;
     s.player = { x: nx, y: ny };
 
-    // Apple pickup
     const idx = s.apples.findIndex((a) => a.x === nx && a.y === ny);
     if (idx >= 0) {
       s.apples.splice(idx, 1);
@@ -798,11 +743,9 @@ export function BananaHorrorGame() {
       if (s.collected >= s.totalApples) {
         s.status = "won";
         engineRef.current?.playWin();
-        engineRef.current?.speak("脱出、成功。");
       }
     }
 
-    // Item pickup
     const iIdx = s.items.findIndex((it) => it.pos.x === nx && it.pos.y === ny);
     if (iIdx >= 0) {
       const item = s.items[iIdx];
@@ -827,7 +770,6 @@ export function BananaHorrorGame() {
     rerender();
   }, [rerender]);
 
-  // Game loop
   useEffect(() => {
     if (!started) return;
     const canvas = canvasRef.current;
@@ -847,7 +789,6 @@ export function BananaHorrorGame() {
       const s = stateRef.current;
 
       if (s.status === "playing") {
-        // Player input
         if (now - lastMoveRef.current > 140 && !s.hidden) {
           let dx = 0, dy = 0;
           const k = keysRef.current;
@@ -865,7 +806,6 @@ export function BananaHorrorGame() {
         const slowed = now < s.slowUntil;
         const shielded = now < s.shieldUntil;
 
-        // Enemies
         if (!stunned) {
           const baseSpeed = enemySpeedRef.current;
           for (const enemy of s.enemies) {
@@ -880,21 +820,17 @@ export function BananaHorrorGame() {
                 if (shielded) {
                   s.shieldUntil = 0;
                   s.lastMessage = "🛡️ シールドが砕けた！";
-                  // bump enemy back to a neighbor
                   const back = randomFreeNeighbor(enemy.pos, s.walls);
                   if (back) enemy.pos = back;
                 } else if (s.lives > 1) {
                   s.lives--;
-                  s.shieldUntil = now + 1500; // brief invuln
+                  s.shieldUntil = now + 1500;
                   s.lastMessage = `💔 ライフ -1（残${s.lives}）`;
                   const back = randomFreeNeighbor(enemy.pos, s.walls);
                   if (back) enemy.pos = back;
                 } else {
                   s.status = "lost";
                   engineRef.current?.playGameOver();
-                  engineRef.current?.speak(
-                    `${ENEMY_LABEL[enemy.kind]}に、つかまった。`,
-                  );
                   rerender();
                   break;
                 }
@@ -904,7 +840,6 @@ export function BananaHorrorGame() {
           }
         }
 
-        // Proximity audio
         let nearestDx = 99, nearestDist = 99;
         for (const enemy of s.enemies) {
           const dx = enemy.pos.x - s.player.x;
@@ -920,7 +855,6 @@ export function BananaHorrorGame() {
         engineRef.current?.setProximity(level * (s.hidden ? 0.3 : 1), pan);
       }
 
-      // ===== Render =====
       ctx.fillStyle = "#0a0805";
       ctx.fillRect(0, 0, W, H);
 
@@ -936,7 +870,6 @@ export function BananaHorrorGame() {
         }
       }
 
-      // Apples
       const pulse = 1 + Math.sin(now / 250) * 0.12;
       ctx.fillStyle = "#e63946";
       s.apples.forEach((a) => {
@@ -945,7 +878,6 @@ export function BananaHorrorGame() {
         ctx.fill();
       });
 
-      // Items (emoji)
       ctx.font = "18px serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -953,7 +885,6 @@ export function BananaHorrorGame() {
       s.items.forEach((it) => {
         const ix = it.pos.x * TILE + TILE / 2;
         const iy = it.pos.y * TILE + TILE / 2;
-        // glow
         const g = ctx.createRadialGradient(ix, iy, 2, ix, iy, 16);
         g.addColorStop(0, "rgba(255,255,200,0.4)");
         g.addColorStop(1, "rgba(255,255,200,0)");
@@ -969,7 +900,7 @@ export function BananaHorrorGame() {
         ctx.restore();
       });
 
-      // Player
+
       const px = s.player.x * TILE + TILE / 2;
       const py = s.player.y * TILE + TILE / 2;
       const shieldedNow = performance.now() < s.shieldUntil;
@@ -992,7 +923,7 @@ export function BananaHorrorGame() {
         ctx.fillRect(px + 2, py - 2, 2, 2);
       }
 
-      // Enemies
+
       const stunnedNow = performance.now() < s.stunUntil;
       s.enemies.forEach((enemy) => {
         const ex = enemy.pos.x * TILE + TILE / 2;
@@ -1096,7 +1027,6 @@ export function BananaHorrorGame() {
           ctx.moveTo(8, 2); ctx.lineTo(9, 4); ctx.lineTo(10, 2); ctx.lineTo(11, 4);
           ctx.stroke();
         }
-        // ⚡ stun marker
         if (stunnedNow) {
           ctx.globalAlpha = 1;
           ctx.fillStyle = "#ffeb3b";
@@ -1108,7 +1038,6 @@ export function BananaHorrorGame() {
         ctx.restore();
       });
 
-      // Vignette — darker when hidden
       const vignetteRadius = s.hidden ? 110 : 220;
       const grad = ctx.createRadialGradient(px, py, 30, px, py, vignetteRadius);
       grad.addColorStop(0, s.hidden ? "rgba(0,0,0,0.2)" : "rgba(0,0,0,0)");
@@ -1234,12 +1163,12 @@ export function BananaHorrorGame() {
                   onChange={(e) => setCustomSpeed(880 - parseInt(e.target.value))}
                   className="w-full accent-yellow-400" />
                 <div className="flex justify-between text-[9px] opacity-60">
-                  <span>のろま</span><span>俊敏</span>
+                  <span>おそい</span><span>はやい</span>
                 </div>
               </div>
               <div className="border-t pt-2" style={{ borderColor: "#5a2a2a" }}>
                 <div className="text-[10px] mb-1.5 opacity-80">
-                  👹 敵の数（合計0でも開始可・無敵モード）
+                  👹 敵の数（合計0でも開始可・無敵）
                 </div>
                 {(Object.keys(customEnemies) as EnemyKind[]).map((kind) => (
                   <div key={kind} className="mb-1">
@@ -1284,7 +1213,6 @@ export function BananaHorrorGame() {
                  s.status === "lost" ? "💀 ゲームオーバー" : "⚠️"}
               </span>
             </div>
-            {/* Active buffs */}
             <div className="flex gap-2 text-[10px] font-mono px-2 w-full" style={{ maxWidth: cw }}>
               {buffShield > 0 && <span className="text-cyan-300">🛡️ {(buffShield/1000).toFixed(1)}s</span>}
               {buffSlow > 0 && <span className="text-blue-300">⏱️ {(buffSlow/1000).toFixed(1)}s</span>}
@@ -1292,7 +1220,6 @@ export function BananaHorrorGame() {
               {s.lastMessage && <span className="opacity-70 ml-auto">{s.lastMessage}</span>}
             </div>
 
-            {/* Canvas + landscape D-pad row */}
             <div className="flex flex-row gap-3 items-center justify-center w-full">
               <canvas
                 ref={canvasRef}
@@ -1333,7 +1260,6 @@ export function BananaHorrorGame() {
               />
 
 
-              {/* Touch D-pad */}
               <div
                 className={`grid grid-cols-3 select-none touch-none [@media(hover:hover)]:hidden flex-none transition-[width] duration-150 ease-out ${isLandscape ? "gap-3" : "gap-2"}`}
                 style={{ width: dpadSlotW }}
@@ -1385,39 +1311,31 @@ export function BananaHorrorGame() {
             style={{ borderColor: "#5a2a2a", background: "rgba(0,0,0,0.4)" }}>
             <summary className="cursor-pointer select-none px-3 py-2 text-xs font-bold flex items-center justify-between"
               style={{ color: "#f4d03f" }}>
-              <span>🎛 ミキサー</span>
+              <span>音声調節</span>
               <span className="text-[10px] opacity-70">クリックで開閉</span>
             </summary>
-            <div className="p-3 pt-0">
-              {([
-                ["master", "マスター"],
-                ["bgm", "BGM"],
-                ["drone", "ドローン"],
-                ["heart", "心拍"],
-                ["sfx", "SFX"],
-              ] as [keyof typeof mix, string][]).map(([k, label]) => (
-                <div key={k} className="mb-1.5">
-                  <div className="flex justify-between text-[10px]">
-                    <span>{label}</span>
-                    <span>{Math.round(mix[k] * 100)}</span>
-                  </div>
-                  <input type="range" min={0} max={1} step={0.01} value={mix[k]}
-                    onChange={(e) => setMix((m) => ({ ...m, [k]: parseFloat(e.target.value) }))}
-                    className="w-full accent-yellow-400" />
+            {([
+              ["master", "マスター"],
+              ["bgm", "BGM"],
+              ["drone", "ドローン"],
+              ["heart", "心拍"],
+              ["sfx", "SFX"],
+            ] as [keyof typeof mix, string][]).map(([k, label]) => (
+              <div key={k} className="mb-1.5">
+                <div className="flex justify-between text-[10px]">
+                  <span>{label}</span>
+                  <span>{Math.round(mix[k] * 100)}</span>
                 </div>
-              ))}
-              <div className="mt-2 pt-2 border-t text-[10px] leading-relaxed" style={{ borderColor: "#5a2a2a" }}>
-                <div className="font-bold mb-1" style={{ color: "#f4d03f" }}>🎁 アイテム</div>
-                {(Object.keys(ITEM_LABEL) as ItemKind[]).map((k) => (
-                  <div key={k}>{ITEM_LABEL[k]}</div>
-                ))}
+                <input type="range" min={0} max={1} step={0.01} value={mix[k]}
+                  onChange={(e) => setMix((m) => ({ ...m, [k]: parseFloat(e.target.value) }))}
+                  className="w-full accent-yellow-400" />
               </div>
-              <button
-                onClick={() => engineRef.current?.speak("テスト音声です。")}
-                className="mt-2 w-full py-1 rounded text-[10px] font-bold"
-                style={{ background: "#5a2a2a", color: "#f4d03f" }}>
-                🔊 TTSテスト
-              </button>
+            ))}
+            <div className="mt-2 pt-2 border-t text-[10px] leading-relaxed" style={{ borderColor: "#5a2a2a" }}>
+              <div className="font-bold mb-1" style={{ color: "#f4d03f" }}>🎁 アイテム</div>
+              {(Object.keys(ITEM_LABEL) as ItemKind[]).map((k) => (
+                <div key={k}>{ITEM_LABEL[k]}</div>
+              ))}
             </div>
           </details>
         </div>
