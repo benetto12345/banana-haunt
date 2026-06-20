@@ -44,7 +44,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Build: update dist"
+            git commit -m "new build"
             git push origin main
           fi
 
