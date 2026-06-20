@@ -216,7 +216,7 @@ class AudioEngine {
     if (!this.ctx || !this.sfxGain) return;
     const t = this.ctx.currentTime;
     [523, 659, 784, 1047].forEach((f, i) => {
-      const osc = this.ctx!.createOscillator();
+Update game description and metadata content      const osc = this.ctx!.createOscillator();
       const g = this.ctx!.createGain();
       osc.type = "sine";
       osc.frequency.value = f;
@@ -1067,6 +1067,24 @@ export function BananaHorrorGame() {
   const buffSlow = Math.max(0, s.slowUntil - nowMs);
   const buffStun = Math.max(0, s.stunUntil - nowMs);
 
+  {/*特定のkeyが押されたときに{reset}を実行*/}
+  useEffect(() => {
+  const handleKeyDown = (event) => {
+    if (s.status === "playing") return;
+
+    if (event.key === "Enter" || event.key === "r") {
+      event.preventDefault(); 
+      reset(); 
+    }
+  };
+
+  window.addEventListener("keydown", handleKeyDown);
+  return () => {
+    window.removeEventListener("keydown", handleKeyDown);
+  };
+}, [s.status, reset]);
+
+  
   return (
     <div className="min-h-[100dvh] w-full flex flex-col items-center justify-start gap-3 p-3 bg-background text-foreground">
       <header className="text-center">
@@ -1290,7 +1308,7 @@ export function BananaHorrorGame() {
             </div>
 
             <div className="text-[10px] opacity-60 font-mono px-2 text-center">
-              矢印/WASD・Shift：隠れる ／ スマホ：スワイプで移動・タップで隠れる
+              矢印/WASD・Shift：隠れる ／ iOS：ボタンで移動・タップで隠れる
             </div>
 
             <div className="flex gap-2">
