@@ -9,12 +9,12 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "ポップで不気味な2Dホラー。りんごを5つ集めて、髪の生えたバナナから逃げ延びろ。WebAudio合成によるサウンドスケープ。",
+          "ポップで不気味な2Dホラー。りんごを集めて、鬼たちから逃げ延びろ。",
       },
       { property: "og:title", content: "黄鬼" },
       {
         property: "og:description",
-        content: "りんごを5つ集めて脱出するポップ・ホラーゲーム",
+        content: "りんごを集めて脱出するホラーゲーム",
       },
     ],
   }),
