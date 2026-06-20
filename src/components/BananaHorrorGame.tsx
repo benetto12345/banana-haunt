@@ -216,7 +216,8 @@ class AudioEngine {
     if (!this.ctx || !this.sfxGain) return;
     const t = this.ctx.currentTime;
     [523, 659, 784, 1047].forEach((f, i) => {
-Update game description and metadata content      const osc = this.ctx!.createOscillator();
+//Update game description and metadata content      
+      const osc = this.ctx!.createOscillator();
       const g = this.ctx!.createGain();
       osc.type = "sine";
       osc.frequency.value = f;
